@@ -1,0 +1,114 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Add the swipeable container styles */
+.swipeable-container {
+  position: relative;
+  overflow: hidden;
+  touch-action: pan-y;
+  height: 100%;
+}
+
+.swipe-content {
+  height: 100%;
+  width: 100%;
+}
+
+.swipe-indicator-left,
+.swipe-indicator-right {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.swipe-indicator-left {
+  left: 0;
+}
+
+.swipe-indicator-right {
+  right: 0;
+}
+
+.swipe-arrow {
+  font-size: 24px;
+  color: #f472b6;
+  background-color: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.left-arrow {
+  transform: rotate(180deg);
+}
+
+/* Show indicators on touch */
+@media (hover: none) {
+  .swipeable-container:active .swipe-indicator-left,
+  .swipeable-container:active .swipe-indicator-right {
+    opacity: 0.7;
+  }
+}
+
+/* Add custom animations for voice messages */
+@keyframes progressAnimation {
+  0% {
+    width: 0%;
+  }
+  100% {
+    width: 100%;
+  }
+}
+
+.animate-progress {
+  animation: progressAnimation 10s linear;
+}
+
+/* Pulse animation for recording indicator */
+@keyframes recording-pulse {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.recording-indicator {
+  animation: recording-pulse 1.5s infinite;
+}
+
+/* Custom scrollbar styles */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
