@@ -81,7 +81,7 @@ export function SignUp() {
         if (profileError) throw profileError;
         
         // Redirect to appropriate page based on role
-        navigate(role === 'physician' ? '/physician/profile' : '/member/dashboard');
+        navigate(role === 'physician' ? '/physician/profile' : '/home');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred during signup');

@@ -45,7 +45,6 @@ const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/home' },
   { icon: Calendar, label: 'Appointments', path: '/appointments' },
   { icon: MessageSquare, label: 'Ask your Queries', path: '/queries' },
-  { icon: CreditCard, label: 'Payments', path: '/payments' },
   { icon: Inbox, label: 'Inbox', path: '/inbox' },
   { icon: UserCircle, label: 'Profile', path: '/profile' },
 ];
@@ -106,7 +105,7 @@ export function MemberAppointments() {
       if (!user) return;
 
       const now = new Date().toISOString();
-      const query = supabase
+      let query = supabase
         .from('physician_appointments')
         .select(`
           *,
@@ -129,13 +128,16 @@ export function MemberAppointments() {
             payment_method
           )
         `)
-        .eq('member_id', user.id)
-        .eq('status', 'scheduled');
+        .eq('member_id', user.id);
 
       if (activeTab === 'upcoming') {
-        query.gte('start_time', now);
+        // Only show scheduled appointments with future dates
+        query = query
+          .eq('status', 'scheduled')
+          .gte('start_time', now);
       } else {
-        query.lt('start_time', now);
+        // Show both completed appointments and all cancelled appointments (regardless of date)
+        query = query.or(`status.eq.completed,status.eq.cancelled`);
       }
 
       query.order('start_time', { ascending: activeTab === 'upcoming' });
@@ -203,6 +205,32 @@ export function MemberAppointments() {
       if (updateError) {
         console.error('Update error:', updateError);
         throw new Error(updateError.message || 'Failed to reschedule appointment');
+      }
+
+      // Send notification to doctor about the rescheduled appointment
+      if (selectedAppointment.physicians && selectedAppointment.physicians.id) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User authentication required');
+
+        const formattedDate = format(startDateTime, 'MMMM d, yyyy');
+        const formattedTime = format(startDateTime, 'h:mm a');
+        
+        const message = {
+          sender_id: user.id,
+          recipient_id: selectedAppointment.physicians.id,
+          content: `Your appointment with ${selectedAppointment.appointment_details?.patient_name || 'a patient'} has been rescheduled to ${formattedDate} at ${formattedTime}.`,
+          is_read: false,
+          created_at: new Date().toISOString()
+        };
+
+        const { error: messageError } = await supabase
+          .from('messages')
+          .insert(message);
+
+        if (messageError) {
+          console.error('Error sending notification message:', messageError);
+          // Continue with appointment rescheduling even if message fails
+        }
       }
 
       // Reset state and refresh appointments to show the latest data
@@ -308,6 +336,32 @@ export function MemberAppointments() {
 
       if (error) throw error;
 
+      // Send notification to doctor about the cancelled appointment
+      if (selectedAppointment.physicians && selectedAppointment.physicians.id) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User authentication required');
+
+        const formattedDate = format(new Date(selectedAppointment.start_time), 'MMMM d, yyyy');
+        const formattedTime = format(new Date(selectedAppointment.start_time), 'h:mm a');
+        
+        const message = {
+          sender_id: user.id,
+          recipient_id: selectedAppointment.physicians.id,
+          content: `Your appointment with ${selectedAppointment.appointment_details?.patient_name || 'a patient'} on ${formattedDate} at ${formattedTime} has been cancelled.`,
+          is_read: false,
+          created_at: new Date().toISOString()
+        };
+
+        const { error: messageError } = await supabase
+          .from('messages')
+          .insert(message);
+
+        if (messageError) {
+          console.error('Error sending cancellation message:', messageError);
+          // Continue with appointment cancellation even if message fails
+        }
+      }
+
       setShowCancelModal(false);
       fetchAppointments();
     } catch (error) {
@@ -334,230 +388,174 @@ export function MemberAppointments() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <Heart className="h-8 w-8 text-pink-500 fill-pink-500" />
-              <span className="ml-2 text-2xl font-bold">GeekCare</span>
-            </div>
-            <button
-              onClick={() => navigate('/home')}
-              className="text-gray-600 hover:text-gray-900"
-            >
-              Back to Home
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <div className="flex">
-        {/* Sidebar */}
-        <div className="w-64 bg-white min-h-[calc(100vh-4rem)] p-6">
-          <div className="text-center mb-8">
-            {member?.profile_image_url ? (
-              <img
-                src={member.profile_image_url}
-                alt={member.full_name}
-                className="w-24 h-24 rounded-full mx-auto mb-4 object-cover"
-              />
-            ) : (
-              <div className="w-24 h-24 rounded-full mx-auto mb-4 bg-gray-200 flex items-center justify-center">
-                <User2 className="w-12 h-12 text-gray-400" />
-              </div>
-            )}
-            <h2 className="text-xl font-semibold">{member?.full_name}</h2>
-            <div className="flex items-center justify-center text-sm text-gray-500 mt-2">
-              <MapPin className="w-4 h-4 mr-1" />
-              {member?.residence || 'Location not set'}
-            </div>
-          </div>
-
-          <nav className="space-y-2">
-            {menuItems.map((item) => (
-              <button
-                key={item.path}
-                onClick={() => navigate(item.path)}
-                className={`w-full flex items-center px-4 py-2 text-left rounded-lg transition-colors ${
-                  location.pathname === item.path
-                    ? 'bg-pink-100 text-pink-500'
-                    : 'text-gray-700 hover:bg-pink-50'
-                }`}
-              >
-                <item.icon className="w-5 h-5 mr-3" />
-                {item.label}
-              </button>
-            ))}
-            <button
-              onClick={handleLogout}
-              className="w-full flex items-center px-4 py-2 text-left text-gray-700 hover:bg-pink-50 rounded-lg"
-            >
-              <LogOut className="w-5 h-5 mr-3" />
-              Logout
-            </button>
-          </nav>
-        </div>
-
-        {/* Main Content */}
-        <div className="flex-1 p-8">
-          <div className="max-w-4xl mx-auto">
-            <div className="bg-white rounded-lg shadow">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-semibold text-gray-800">My Appointments</h2>
-                  <div className="flex space-x-4">
-                    <button
-                      onClick={() => setActiveTab('upcoming')}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium ${
-                        activeTab === 'upcoming'
-                          ? 'bg-pink-500 text-white'
-                          : 'text-gray-500 hover:bg-gray-100'
-                      }`}
-                    >
-                      Upcoming
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('past')}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium ${
-                        activeTab === 'past'
-                          ? 'bg-pink-500 text-white'
-                          : 'text-gray-500 hover:bg-gray-100'
-                      }`}
-                    >
-                      Past
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mt-4">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                    <input
-                      type="text"
-                      placeholder="Search by doctor or patient name"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500"
-                    />
-                  </div>
+    <div className="flex-1 overflow-y-auto">
+      {/* Main Content */}
+      <div className="p-8">
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-white rounded-lg shadow">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-gray-800">My Appointments</h2>
+                <div className="flex space-x-4">
+                  <button
+                    onClick={() => setActiveTab('upcoming')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                      activeTab === 'upcoming'
+                        ? 'bg-pink-500 text-white'
+                        : 'text-gray-500 hover:bg-gray-100'
+                    }`}
+                  >
+                    Upcoming
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('past')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                      activeTab === 'past'
+                        ? 'bg-pink-500 text-white'
+                        : 'text-gray-500 hover:bg-gray-100'
+                    }`}
+                  >
+                    Past
+                  </button>
                 </div>
               </div>
 
-              <div className="divide-y divide-gray-200">
-                {loading ? (
-                  <div className="p-6 text-center text-gray-500">Loading appointments...</div>
-                ) : filteredAppointments.length === 0 ? (
-                  <div className="p-6 text-center text-gray-500">
-                    No {activeTab} appointments found
-                  </div>
-                ) : (
-                  filteredAppointments.map((appointment) => (
-                    <div key={appointment.id} className="p-6">
-                      <div className="flex items-start">
-                        {appointment.physicians.profile_image_url ? (
-                          <img
-                            src={appointment.physicians.profile_image_url}
-                            alt={appointment.physicians.full_name}
-                            className="w-16 h-16 rounded-lg object-cover"
-                          />
-                        ) : (
-                          <div className="w-16 h-16 rounded-lg bg-gray-200 flex items-center justify-center">
-                            <User2 className="w-8 h-8 text-gray-400" />
+              <div className="mt-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search by doctor or patient name"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="divide-y divide-gray-200">
+              {loading ? (
+                <div className="p-6 text-center text-gray-500">Loading appointments...</div>
+              ) : filteredAppointments.length === 0 ? (
+                <div className="p-6 text-center text-gray-500">
+                  No {activeTab} appointments found
+                </div>
+              ) : (
+                filteredAppointments.map((appointment) => (
+                  <div 
+                    key={appointment.id} 
+                    className="p-6 hover:bg-gray-50 cursor-pointer transition-colors"
+                    onClick={() => {
+                      setSelectedAppointment(appointment);
+                      setShowDetailsModal(true);
+                    }}
+                  >
+                    <div className="flex items-start">
+                      {appointment.physicians.profile_image_url ? (
+                        <img
+                          src={appointment.physicians.profile_image_url}
+                          alt={appointment.physicians.full_name}
+                          className="w-16 h-16 rounded-lg object-cover"
+                        />
+                      ) : (
+                        <div className="w-16 h-16 rounded-lg bg-gray-200 flex items-center justify-center">
+                          <User2 className="w-8 h-8 text-gray-400" />
+                        </div>
+                      )}
+                      <div className="ml-6 flex-1">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="text-lg font-medium text-gray-900">
+                              Dr. {appointment.physicians.full_name}
+                            </h3>
+                            <p className="text-gray-500">
+                              {appointment.physicians.physician_specialties?.[0]?.specialty}
+                            </p>
                           </div>
-                        )}
-                        <div className="ml-6 flex-1">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <h3 className="text-lg font-medium text-gray-900">
-                                Dr. {appointment.physicians.full_name}
-                              </h3>
-                              <p className="text-gray-500">
-                                {appointment.physicians.physician_specialties?.[0]?.specialty}
-                              </p>
-                            </div>
-                            <div className="flex items-center space-x-4">
-                              {activeTab === 'upcoming' && appointment.status === 'scheduled' && (
-                                <>
-                                  <button
-                                    onClick={() => {
-                                      setSelectedAppointment(appointment);
-                                      setSelectedDate(format(new Date(appointment.start_time), 'yyyy-MM-dd'));
-                                      fetchAvailableSlots(
-                                        format(new Date(appointment.start_time), 'yyyy-MM-dd'),
-                                        appointment.physicians.id
-                                      );
-                                      setShowRescheduleModal(true);
-                                    }}
-                                    className="flex items-center px-3 py-1 text-sm text-pink-600 hover:bg-pink-50 rounded-lg"
-                                  >
-                                    <Edit2 className="w-4 h-4 mr-1" />
-                                    Reschedule
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setSelectedAppointment(appointment);
-                                      setShowCancelModal(true);
-                                    }}
-                                    className="flex items-center px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded-lg"
-                                  >
-                                    <X className="w-4 h-4 mr-1" />
-                                    Cancel
-                                  </button>
-                                </>
-                              )}
-                              <button
-                                onClick={() => {
-                                  setSelectedAppointment(appointment);
-                                  setShowDetailsModal(true);
-                                }}
-                                className="px-3 py-1 text-sm text-white bg-pink-500 rounded-lg hover:bg-pink-600"
-                              >
-                                View Details
-                              </button>
-                            </div>
-                          </div>
-                          <div className="mt-2 grid grid-cols-2 gap-4 text-sm">
-                            <div className="flex items-center text-gray-500">
-                              <Calendar className="w-4 h-4 mr-2" />
-                              {format(new Date(appointment.start_time), 'MMMM d, yyyy')}
-                            </div>
-                            <div className="flex items-center text-gray-500">
-                              <Clock className="w-4 h-4 mr-2" />
-                              {format(new Date(appointment.start_time), 'h:mm a')}
-                            </div>
-                            <div className="flex items-center text-gray-500">
-                              <FileText className="w-4 h-4 mr-2" />
-                              {appointment.appointment_details?.reason || 'No reason provided'}
-                            </div>
-                            <div className="flex items-center text-gray-500">
-                              <DollarSign className="w-4 h-4 mr-2" />
-                              ${appointment.appointment_payments?.[0]?.amount || 0}
-                              {appointment.appointment_payments?.[0]?.status === 'completed' && (
-                                <Check className="w-4 h-4 ml-1 text-green-500" />
-                              )}
-                            </div>
-                          </div>
-                          <div className="mt-2">
-                            <span
-                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                appointment.status === 'completed'
-                                  ? 'bg-green-100 text-green-800'
-                                  : appointment.status === 'cancelled'
-                                  ? 'bg-red-100 text-red-800'
-                                  : 'bg-yellow-100 text-yellow-800'
-                              }`}
+                          <div className="flex items-center space-x-4">
+                            {activeTab === 'upcoming' && appointment.status === 'scheduled' && (
+                              <>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation(); // Prevent opening details modal
+                                    setSelectedAppointment(appointment);
+                                    setSelectedDate(format(new Date(appointment.start_time), 'yyyy-MM-dd'));
+                                    fetchAvailableSlots(
+                                      format(new Date(appointment.start_time), 'yyyy-MM-dd'),
+                                      appointment.physicians.id
+                                    );
+                                    setShowRescheduleModal(true);
+                                  }}
+                                  className="flex items-center px-3 py-1 text-sm text-pink-600 hover:bg-pink-50 rounded-lg"
+                                >
+                                  <Edit2 className="w-4 h-4 mr-1" />
+                                  Reschedule
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation(); // Prevent opening details modal
+                                    setSelectedAppointment(appointment);
+                                    setShowCancelModal(true);
+                                  }}
+                                  className="flex items-center px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded-lg"
+                                >
+                                  <X className="w-4 h-4 mr-1" />
+                                  Cancel
+                                </button>
+                              </>
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation(); // This is redundant but keeps consistency
+                                setSelectedAppointment(appointment);
+                                setShowDetailsModal(true);
+                              }}
+                              className="px-3 py-1 text-sm text-white bg-pink-500 rounded-lg hover:bg-pink-600"
                             >
-                              {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
-                            </span>
+                              View Details
+                            </button>
                           </div>
+                        </div>
+                        <div className="mt-2 grid grid-cols-2 gap-4 text-sm">
+                          <div className="flex items-center text-gray-500">
+                            <Calendar className="w-4 h-4 mr-2" />
+                            {format(new Date(appointment.start_time), 'MMMM d, yyyy')}
+                          </div>
+                          <div className="flex items-center text-gray-500">
+                            <Clock className="w-4 h-4 mr-2" />
+                            {format(new Date(appointment.start_time), 'h:mm a')}
+                          </div>
+                          <div className="flex items-center text-gray-500">
+                            <FileText className="w-4 h-4 mr-2" />
+                            {appointment.appointment_details?.reason || 'No reason provided'}
+                          </div>
+                          <div className="flex items-center text-gray-500">
+                            <DollarSign className="w-4 h-4 mr-2" />
+                            ${appointment.appointment_payments?.[0]?.amount || 0}
+                            {appointment.appointment_payments?.[0]?.status === 'completed' && (
+                              <Check className="w-4 h-4 ml-1 text-green-500" />
+                            )}
+                          </div>
+                        </div>
+                        <div className="mt-2">
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              appointment.status === 'completed'
+                                ? 'bg-green-100 text-green-800'
+                                : appointment.status === 'cancelled'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-yellow-100 text-yellow-800'
+                            }`}
+                          >
+                            {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
+                          </span>
                         </div>
                       </div>
                     </div>
-                  ))
-                )}
-              </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

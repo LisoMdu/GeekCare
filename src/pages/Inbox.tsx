@@ -153,6 +153,7 @@ export function Inbox() {
   };
 
   const handleSelectChat = (chat: any) => {
+    console.log("Selecting chat:", chat);
     setSelectedChat(chat);
   };
 
@@ -304,97 +305,16 @@ export function Inbox() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <header className="bg-white shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <Heart className="h-8 w-8 text-pink-500 fill-pink-500" />
-                <span className="ml-2 text-2xl font-bold">GeekCare</span>
-              </div>
-              <div className="flex items-center space-x-6">
-                <div className="h-6 w-6 bg-gray-200 rounded-full animate-pulse" />
-                <div className="h-10 w-10 bg-gray-200 rounded-full animate-pulse" />
-              </div>
-            </div>
-          </div>
-        </header>
-        
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <h1 className="text-2xl font-bold text-gray-900 mb-6">Inbox</h1>
-          
-          <div className="flex h-[calc(100vh-200px)]">
-            <div className="w-1/3 mr-4">
-              <SkeletonChatList />
-            </div>
-            <div className="flex-1">
-              <SkeletonChatMessages />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    return <MessageLoading />;
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <Heart className="h-8 w-8 text-pink-500 fill-pink-500" />
-              <span className="ml-2 text-2xl font-bold">GeekCare</span>
-            </div>
-            <div className="flex items-center space-x-6">
-              <button className="text-gray-600 hover:text-gray-900">
-                <Bell className="h-6 w-6" />
-              </button>
-              <button 
-                onClick={() => navigate(userType === 'member' ? '/profile' : '/physician/profile')}
-                className="flex items-center space-x-2"
-              >
-                {member?.profile_image_url ? (
-                  <img
-                    src={member.profile_image_url}
-                    alt={member.full_name}
-                    className="h-10 w-10 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
-                    <User2 className="h-6 w-6 text-gray-400" />
-                  </div>
-                )}
-                <span className="text-gray-700">Hi, {member?.full_name?.split(' ')[0]}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">Inbox</h1>
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={handleNewChat}
-              className="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg flex items-center"
-            >
-              <Plus className="w-5 h-5 mr-2" />
-              New Chat
-            </button>
-            <button
-              onClick={handleBackToHome}
-              className="text-pink-500 hover:text-pink-600"
-            >
-              Back to Dashboard
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-6 h-[calc(100vh-230px)]">
-          {/* Chat List */}
-          <div className="col-span-1">
+    <div className="flex-1 flex flex-col">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">Inbox</h1>
+        
+        <div className="flex-1 flex flex-col md:flex-row overflow-hidden h-[calc(100vh-200px)]">
+          <div className="w-full md:w-1/3 md:mr-4 mb-4 md:mb-0">
             <ChatList 
               chats={chats} 
               selectedChatId={selectedChat?.room_id || null}
@@ -403,21 +323,29 @@ export function Inbox() {
             />
           </div>
 
-          {/* Chat Messages */}
-          <div className="col-span-2">
+          <div className="w-full md:w-2/3">
             {selectedChat ? (
               <ChatMessages 
                 selectedChat={selectedChat} 
                 isMember={userType === 'member'} 
               />
             ) : (
-              <div className="flex items-center justify-center h-full bg-white rounded-lg shadow-sm">
-                <p className="text-gray-500">Select a conversation to start chatting</p>
+              <div className="flex items-center justify-center h-full bg-white rounded-lg shadow-sm p-6">
+                <div className="text-center">
+                  <p className="text-gray-500 mb-4">Select a conversation or start a new chat</p>
+                  <button
+                    onClick={handleNewChat}
+                    className="inline-flex items-center px-4 py-2 bg-pink-100 text-pink-600 rounded-lg hover:bg-pink-200"
+                  >
+                    <Plus className="w-5 h-5 mr-2" />
+                    New Conversation
+                  </button>
+                </div>
               </div>
             )}
           </div>
         </div>
-      </main>
+      </div>
 
       {/* New Chat Modal */}
       {isNewChatModalOpen && (

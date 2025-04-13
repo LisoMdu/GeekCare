@@ -9,6 +9,9 @@ import {
   UserCircle,
   LogOut,
   HelpCircle,
+  MessageSquare,
+  FileText,
+  Stethoscope,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -16,9 +19,10 @@ interface SidebarProps {
   name: string;
   title?: string;
   profileImage?: string;
+  role?: 'member' | 'physician';
 }
 
-export function Sidebar({ name, title, profileImage }: SidebarProps) {
+export function Sidebar({ name, title, profileImage, role = 'physician' }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
   
@@ -34,15 +38,29 @@ export function Sidebar({ name, title, profileImage }: SidebarProps) {
     }
   };
 
-  const menuItems = [
+  // Define menu items based on role
+  const physicianMenuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/physician/dashboard' },
     { icon: Calendar, label: 'Appointments', path: '/physician/appointments' },
     { icon: Clock, label: 'My Schedule', path: '/physician/schedule' },
-    { icon: CreditCard, label: 'Payments', path: '/physician/payments' },
     { icon: Inbox, label: 'Inbox', path: '/physician/inbox' },
+    { icon: MessageSquare, label: 'FAQs', path: '/physician/faqs' },
+    { icon: Stethoscope, label: 'Patient Queries', path: '/physician/queries' },
     { icon: UserCircle, label: 'Profile', path: '/physician/profile' },
     { icon: HelpCircle, label: 'Support', path: '/physician/support' },
   ];
+
+  const memberMenuItems = [
+    { icon: LayoutDashboard, label: 'Dashboard', path: '/home' },
+    { icon: Calendar, label: 'Appointments', path: '/appointments' },
+    { icon: MessageSquare, label: 'FAQs', path: '/faqs' },
+    { icon: Inbox, label: 'Inbox', path: '/inbox' },
+    { icon: FileText, label: 'Medical Records', path: '/medical-records' },
+    { icon: UserCircle, label: 'Profile', path: '/profile' },
+    { icon: HelpCircle, label: 'Support', path: '/support' },
+  ];
+
+  const menuItems = role === 'physician' ? physicianMenuItems : memberMenuItems;
 
   return (
     <div className="w-64 bg-white shadow-lg h-screen flex flex-col">

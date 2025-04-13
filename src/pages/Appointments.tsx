@@ -54,6 +54,7 @@ export function Appointments() {
   const [physician, setPhysician] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [schedules, setSchedules] = useState<TimeSlot[]>([]);
+  const [showCancelModal, setShowCancelModal] = useState(false);
 
   useEffect(() => {
     fetchPhysicianData();
@@ -395,15 +396,103 @@ export function Appointments() {
     return patientName.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
+  const handleCancelAppointment = async () => {
+    if (!selectedAppointment) return;
+    
+    // Get cancellation reason
+    const reason = prompt("Please provide a reason for cancellation:");
+    if (reason === null) return; // User clicked cancel
+    
+    try {
+      setLoading(true);
+      
+      // Update appointment status to cancelled
+      const { error } = await supabase
+        .from('physician_appointments')
+        .update({ 
+          status: 'cancelled',
+          cancellation_reason: reason || 'No reason provided'  
+        })
+        .eq('id', selectedAppointment.id);
+        
+      if (error) throw error;
+      
+      // Send message to patient about cancellation
+      if (selectedAppointment.member_id) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User authentication required');
+        
+        const formattedDate = format(new Date(selectedAppointment.start_time), 'MMMM d, yyyy');
+        const formattedTime = format(new Date(selectedAppointment.start_time), 'h:mm a');
+        
+        // Check if there's an existing chat room with this patient
+        const { data: existingRoom, error: roomError } = await supabase
+          .from('chat_rooms')
+          .select('id')
+          .eq('physician_id', user.id)
+          .eq('member_id', selectedAppointment.member_id)
+          .maybeSingle();
+          
+        if (roomError) {
+          console.error('Error checking for existing chat room:', roomError);
+        }
+        
+        let roomId;
+        
+        // If no chat room exists, create one
+        if (!existingRoom) {
+          const { data: newRoom, error: createRoomError } = await supabase
+            .from('chat_rooms')
+            .insert({
+              physician_id: user.id,
+              member_id: selectedAppointment.member_id,
+              created_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+            
+          if (createRoomError) {
+            console.error('Error creating chat room:', createRoomError);
+            throw createRoomError;
+          }
+          
+          roomId = newRoom.id;
+        } else {
+          roomId = existingRoom.id;
+        }
+        
+        // Send the cancellation message
+        const cancellationMessage = `I regret to inform you that I had to cancel our appointment scheduled for ${formattedDate} at ${formattedTime}.\n\nReason: ${reason || 'No reason provided'}\n\nPlease reschedule at your earliest convenience. I look forward to meeting with you soon.`;
+        
+        const { error: messageError } = await supabase
+          .from('chat_messages')
+          .insert({
+            chat_room_id: roomId,
+            user_id: user.id,
+            content: cancellationMessage,
+            created_at: new Date().toISOString()
+          });
+          
+        if (messageError) {
+          console.error('Error sending cancellation message:', messageError);
+          // Continue with appointment cancellation even if message fails
+        }
+      }
+      
+      setShowCancelModal(false);
+      fetchAppointments();
+    } catch (error) {
+      console.error('Error cancelling appointment:', error);
+      setError('Failed to cancel appointment');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex">
-        <Sidebar
-          name={physician?.full_name || 'Dr.'}
-          title={physician?.physician_specialties?.[0]?.specialty || 'Physician'}
-          profileImage={physician?.profile_image_url}
-        />
-        <div className="flex-1 p-8">
+      <div className="flex-1">
+        <div className="p-8">
           <div className="max-w-6xl mx-auto">
             <div className="bg-white rounded-lg shadow p-6 text-center">
               <p className="text-red-600">{error}</p>
@@ -421,18 +510,12 @@ export function Appointments() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <Sidebar
-        name={physician?.full_name || 'Dr.'}
-        title={physician?.physician_specialties?.[0]?.specialty || 'Physician'}
-        profileImage={physician?.profile_image_url}
-      />
-
+    <div className="flex-1">
       <SwipeableContainer
         leftRoute="/inbox"
         rightRoute="/home"
       >
-        <div className="flex-1 p-8">
+        <div className="p-8">
           <div className="max-w-6xl mx-auto">
             <div className="bg-white rounded-lg shadow">
               <div className="px-6 py-4 border-b border-gray-200">
@@ -563,7 +646,7 @@ export function Appointments() {
                           </td>
                           <td className="px-6 py-4">
                             <div className="text-sm font-medium text-gray-900">
-                              {appointment.members?.full_name || 'N/A'}
+                              {appointment.appointment_details?.[0]?.patient_name || appointment.members?.full_name || 'N/A'}
                             </div>
                             {appointment.appointment_details?.[0]?.reason && (
                               <div className="text-sm text-gray-500">
@@ -859,7 +942,7 @@ export function Appointments() {
                 <div>
                   <h4 className="text-sm font-medium text-gray-500">Patient Details</h4>
                   <p className="mt-1 text-sm text-gray-900">
-                    {selectedAppointment.appointment_details[0].patient_name}
+                    {selectedAppointment.appointment_details?.[0]?.patient_name || selectedAppointment.members?.full_name || 'N/A'}
                   </p>
                 </div>
               </>

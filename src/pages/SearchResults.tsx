@@ -16,6 +16,7 @@ export function SearchResults() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [physicians, setPhysicians] = useState<any[]>([]);
+  const [filteredPhysicians, setFilteredPhysicians] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<SearchFilters>({
@@ -28,6 +29,11 @@ export function SearchResults() {
   useEffect(() => {
     fetchPhysicians();
   }, []);
+
+  // Apply filters whenever filters state changes
+  useEffect(() => {
+    applyFilters();
+  }, [filters, physicians]);
 
   const fetchPhysicians = async () => {
     try {
@@ -46,6 +52,7 @@ export function SearchResults() {
 
       if (error) throw error;
       setPhysicians(data || []);
+      
     } catch (error) {
       console.error('Error fetching physicians:', error);
     } finally {
@@ -53,33 +60,57 @@ export function SearchResults() {
     }
   };
 
+  const applyFilters = () => {
+    let filtered = [...physicians];
+    
+    // Filter by specialty
+    if (filters.specialty) {
+      filtered = filtered.filter(physician => 
+        physician.physician_specialties?.some(
+          (s: any) => s.specialty.toLowerCase() === filters.specialty.toLowerCase()
+        )
+      );
+    }
+    
+    // Filter by gender
+    if (filters.gender) {
+      filtered = filtered.filter(physician => 
+        physician.gender?.toLowerCase() === filters.gender?.toLowerCase()
+      );
+    }
+    
+    // Filter by language
+    if (filters.language) {
+      filtered = filtered.filter(physician => 
+        physician.physician_languages?.some(
+          (l: any) => l.language.toLowerCase() === filters.language?.toLowerCase()
+        )
+      );
+    }
+    
+    // Filter by price
+    filtered = filtered.filter(physician => 
+      physician.consultation_fee >= filters.minPrice && 
+      physician.consultation_fee <= filters.maxPrice
+    );
+    
+    setFilteredPhysicians(filtered);
+  };
+
   const handleBookAppointment = (physicianId: string) => {
     navigate(`/book/${physicianId}`);
   };
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <Heart className="h-8 w-8 text-pink-500 fill-pink-500" />
-              <span className="ml-2 text-2xl font-bold">GeekCare</span>
-            </div>
-            <button
-              onClick={() => navigate('/home')}
-              className="text-gray-600 hover:text-gray-900"
-            >
-              Back to Home
-            </button>
-          </div>
-        </div>
-      </header>
+  const handleViewProfile = (physicianId: string) => {
+    navigate(`/doctor/${physicianId}`);
+  };
 
+  return (
+    <div className="flex-1 bg-gray-50">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-gray-900">
-            {loading ? 'Loading...' : `${physicians.length} Physicians Found`}
+            {loading ? 'Loading...' : `${filteredPhysicians.length} Physicians Found`}
           </h1>
           <button
             onClick={() => setShowFilters(!showFilters)}
@@ -93,6 +124,22 @@ export function SearchResults() {
         {showFilters && (
           <div className="bg-white p-4 rounded-lg shadow-sm mb-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Specialty</label>
+                <select
+                  value={filters.specialty}
+                  onChange={(e) => setFilters({ ...filters, specialty: e.target.value })}
+                  className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-pink-500 focus:ring-pink-500"
+                >
+                  <option value="">Any</option>
+                  {MEDICAL_SPECIALTIES.map((specialty) => (
+                    <option key={specialty} value={specialty}>
+                      {specialty}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
               <div>
                 <label className="block text-sm font-medium text-gray-700">Gender</label>
                 <select
@@ -146,7 +193,7 @@ export function SearchResults() {
         )}
 
         <div className="grid grid-cols-1 gap-6">
-          {physicians.map((physician) => (
+          {filteredPhysicians.map((physician) => (
             <div key={physician.id} className="bg-white rounded-lg shadow-sm overflow-hidden">
               <div className="p-6">
                 <div className="flex items-start">
@@ -191,24 +238,72 @@ export function SearchResults() {
                       ${physician.consultation_fee}
                     </p>
                   </div>
-                  <button
-                    onClick={() => handleBookAppointment(physician.id)}
-                    className="px-6 py-2 bg-pink-500 text-white rounded-lg hover:bg-pink-600"
-                  >
-                    Book Appointment
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleViewProfile(physician.id)}
+                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                    >
+                      View Profile
+                    </button>
+                    <button
+                      onClick={() => handleBookAppointment(physician.id)}
+                      className="px-6 py-2 bg-pink-500 text-white rounded-lg hover:bg-pink-600"
+                    >
+                      Book Appointment
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           ))}
         </div>
 
-        {!loading && physicians.length === 0 && (
+        {!loading && filteredPhysicians.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-gray-500 text-lg">No physicians found.</p>
+            <p className="text-gray-500 text-lg">No physicians found matching your criteria.</p>
           </div>
         )}
       </main>
     </div>
   );
 }
+
+// List of medical specialties
+const MEDICAL_SPECIALTIES = [
+  'Allergy and Immunology',
+  'Anesthesiology',
+  'Cardiology',
+  'Dermatology',
+  'Emergency Medicine',
+  'Endocrinology',
+  'Family Medicine',
+  'Gastroenterology',
+  'General Surgery',
+  'Geriatric Medicine',
+  'Gynecology',
+  'Hematology',
+  'Infectious Disease',
+  'Internal Medicine',
+  'Medical Genetics',
+  'Nephrology',
+  'Neurology',
+  'Neurosurgery',
+  'Obstetrics and Gynecology',
+  'Oncology',
+  'Ophthalmology',
+  'Orthopedic Surgery',
+  'Otolaryngology',
+  'Pathology',
+  'Pediatrics',
+  'Physical Medicine',
+  'Plastic Surgery',
+  'Psychiatry',
+  'Pulmonology',
+  'Radiation Oncology',
+  'Radiology',
+  'Rheumatology',
+  'Sports Medicine',
+  'Thoracic Surgery',
+  'Urology',
+  'Vascular Surgery'
+];

@@ -127,12 +127,16 @@ const VoiceRecorder = lazy(() =>
 );
 
 interface ChatMessagesProps {
-  roomId: string;
+  selectedChat: any;
+  isMember: boolean;
 }
 
-export const ChatMessages: React.FC<ChatMessagesProps> = ({ roomId }) => {
+export const ChatMessages: React.FC<ChatMessagesProps> = ({ selectedChat, isMember }) => {
   const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
   const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
+
+  // Extract roomId from selectedChat
+  const roomId = selectedChat?.room_id;
 
   // Use optional chaining to prevent errors if useSocket hook is missing properties
   const {
@@ -172,8 +176,8 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({ roomId }) => {
     setCurrentAudio(audioElement);
   };
 
-  // If there's no room ID, show a friendly message
-  if (!roomId) {
+  // If there's no chat selected, show a friendly message
+  if (!selectedChat || !roomId) {
     return (
       <div className="flex flex-col h-full bg-white rounded-lg shadow-sm overflow-hidden p-4">
         <p className="text-center text-gray-500">Please select a chat to start messaging.</p>
